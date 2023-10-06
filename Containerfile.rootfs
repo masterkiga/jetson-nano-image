@@ -2,16 +2,30 @@ FROM ubuntu:focal
 
 LABEL org.opencontainers.image.authors="Badr @pythops"
 
-# Install systemd
-RUN apt update && \
-    apt install -y systemd
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ="Europe/London" \
+    LANG="en_GB.UTF-8" \
+    LANGUAGE="en_GB:en" \
+    LC_ALL="en_GB.UTF-8"
 
-# Update apt mirrors
-RUN echo "deb http://ports.ubuntu.com/ubuntu-ports/ bionic main" >> /etc/apt/sources.list && \
-    apt update
+# Basics: Set Timezone, Locale, and SystemD
+RUN apt-get update && apt-get install -y systemd tzdata locales apt-utils && \
+    echo "deb http://ports.ubuntu.com/ubuntu-ports/ bionic main" >> /etc/apt/sources.list && \
+    ln -fs /usr/share/zoneinfo/Europe/London /etc/localtime && \
+    sed -i '/en_GB.UTF-8/s/^# //g' /etc/locale.gen && \
+    locale-gen && \
+    localedef -i en_GB -f UTF-8 en_GB.UTF-8 && \
+    dpkg-reconfigure -f noninteractive tzdata
 
-# Nvidia required packages
-RUN apt install -y \
+# Development tools and compilers
+RUN apt-get update && apt-get install -y gcc-9 g++-9 gcc-8 g++-8 && \
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 1 --slave /usr/bin/g++ g++ /usr/bin/g++-9 && \
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 2 --slave /usr/bin/g++ g++ /usr/bin/g++-8 && \
+    gcc --version && \
+    g++ --version
+
+# Nvidia required packages (Note: libffi6 not available in Ubuntu 23.04)
+RUN apt-get -y install \
         libgles2 \
         libpangoft2-1.0-0 \
         libxkbcommon0 \
@@ -33,18 +47,39 @@ RUN apt install -y \
         libegl1 \
         libegl1-mesa \
         libgtk-3-0 \
-        python2 \
-        python-is-python2 \
         libgstreamer1.0-0 \
         libgstreamer-plugins-bad1.0-0 \
         i2c-tools \
-        bridge-utils
+        bridge-utils \
+        curl \
+        software-properties-common
+
+# Install python, pip and set default python version
+# Python 3.10 not supported by TF until v2.7 but that supports Cuda 11 which is not compatible with Jetson
+RUN add-apt-repository -y ppa:deadsnakes/ppa && \
+    apt-get -y update && \
+    apt-get install -y \
+        python3.9-full \
+        python3.9-dev && \
+    curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
+    python3.9 get-pip.py && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 1 && \
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.9 1 && \
+    update-alternatives --install /usr/bin/pip pip /usr/local/bin/pip3 1 && \
+    python --version && \
+    python3 --version && \
+    python -m pip install --upgrade requests setuptools urllib3 idna certifi charset_normalizer
 
 # Additional tools
-RUN apt install -y \
+RUN apt-get install -y \
+        autoconf \
+        automake \
+        apt-utils \
         bash-completion \
         build-essential \
         btrfs-progs \
+        binutils \
+        binfmt-support \
         cmake \
         curl \
         dnsutils \
@@ -56,19 +91,173 @@ RUN apt install -y \
         linux-firmware \
         locales \
         net-tools \
+        ninja-build \
         netplan.io \
         pciutils \
-        python3-dev \
         ssh \
         sudo \
         udev \
         unzip \
         usbutils \
         neovim \
+        wireless-tools \
         wpasupplicant \
         parted \
         gdisk \
-        e2fsprogs
+        e2fsprogs \
+        gnupg2
+
+RUN curl -L https://repo.download.nvidia.com/jetson/jetson-ota-public.asc | apt-key add - 2>/dev/null && \
+    echo "deb https://repo.download.nvidia.com/jetson/common r32.7 main" > /etc/apt/sources.list.d/nvidia-l4t-apt-source.list \
+ && echo "deb https://repo.download.nvidia.com/jetson/t210 r32.7 main" >> /etc/apt/sources.list.d/nvidia-l4t-apt-source.list
+
+# NVIDIA Jetson packages
+RUN mkdir -p /opt/nvidia/l4t-packages/ && \
+    touch /opt/nvidia/l4t-packages/.nv-l4t-disable-boot-fw-update-in-preinstall && \
+    apt-get -y update && \
+    apt-get -y dist-upgrade && \
+    apt-get install -y -o DPkg::options::="--force-overwrite" \
+        nvidia-l4t-core \
+        nvidia-l4t-init
+
+RUN apt-get install -y \
+        nvidia-l4t-bootloader \
+        nvidia-l4t-kernel \
+        nvidia-l4t-kernel-dtbs \
+        nvidia-l4t-kernel-headers \
+        nvidia-l4t-multimedia \
+        nvidia-l4t-multimedia-utils \
+        nvidia-l4t-x11 \
+        nvidia-l4t-wayland \
+        nvidia-l4t-gstreamer \
+        nvidia-l4t-jetson-io \
+        nvidia-l4t-jetson-multimedia-api
+
+# NVIDIA Cuda packages
+RUN apt-get install -y \
+        cuda-toolkit-10-2 \
+        cuda-samples-10-2 \
+        cuda-cudart-10-2 \
+        cuda-cudart-dev-10-2 \
+        libcufft-10-2 \
+        libcufft-dev-10-2 \
+        libcurand-10-2 \
+        libcurand-dev-10-2 \
+        libcusolver-10-2 \
+        libcusolver-dev-10-2 \
+        libcusparse-10-2 \
+        libcusparse-dev-10-2 \
+        libnpp-10-2 \
+        libnpp-dev-10-2 \
+        cuda-nvgraph-10-2 \
+        cuda-nvgraph-dev-10-2 \
+        cuda-nvrtc-10-2 \
+        cuda-nvrtc-dev-10-2 \
+        cuda-nvtx-10-2 \
+        cuda-nvml-dev-10-2 \
+        libcublas10 \
+        libcublas-dev \
+        libnvinfer-dev \
+        libnvinfer-plugin-dev \
+        libnvinfer-samples \
+        libnvinfer-doc \
+        libnvinfer-bin \
+        libcudnn8 \
+        libcudnn8-dev \
+        libcudnn8-samples
+
+RUN ln -s /usr/bin/gcc-8 /usr/local/cuda/bin/gcc && \
+    ln -s /usr/bin/g++-8 /usr/local/cuda/bin/g++
+
+# Install Tensorflow
+RUN apt-get install -y \
+        libhdf5-serial-dev \
+        hdf5-tools \
+        libhdf5-dev \
+        zlib1g-dev \
+        zip \
+        libjpeg8-dev \
+        liblapack-dev \
+        libblas-dev \
+        gfortran \
+        openjdk-8-jdk \
+        swig \
+        wget \
+        golang-go \
+        git \
+        mawk \
+        procps \
+        coreutils
+
+# Numpy fixed at 1.23.5 to avoid - AttributeError: module 'numpy' has no attribute 'object' from 1.24.0 onwards
+RUN python -m pip install --upgrade wheel numpy==1.23.5 future mock keras_preprocessing keras_applications gast protobuf pybind11 cython pkgconfig packaging h5py
+
+RUN wget https://github.com/bazelbuild/bazel/releases/download/4.2.1/bazel-4.2.1-linux-arm64 && \
+    chmod +x bazel-4.2.1-linux-arm64 && \
+    mv bazel-4.2.1-linux-arm64 /usr/local/bin/bazel
+
+# TensorRT8 is included but fails to compile. TensorRT7 is not available in the repo.
+ENV TMP=/tmp \
+ CXX=/usr/bin/g++-8 \
+ TF_NEED_CUDA=1 \
+ GCC_HOST_COMPILER_PATH=/usr/bin/gcc-8 \
+ CUDA_TOOLKIT_PATH=/usr/local/cuda \
+ CUDNN_INSTALL_PATH=/usr/lib/aarch64-linux-gnu \
+ TENSORRT_INSTALL_PATH=/usr/lib/aarch64-linux-gnu \
+ CC_OPT_FLAGS="--copt=-mfma --copt=-mfpmath=both --config=cuda" \
+ PYTHON_BIN_PATH="/usr/bin/python" \
+ PYTHON_LIB_PATH="/usr/lib/python3/dist-packages" \
+ USE_DEFAULT_PYTHON_LIB_PATH=1 \
+ TF_CUDA_VERSION="10.2" \
+ TF_CUDA_COMPUTE_CAPABILITIES=5.3 \
+ TF_CUDA_PATHS="/usr/local/cuda,/usr/local/cuda/include,/usr/local/cuda/lib64,/usr/lib,/usr/include" \
+ TF_CUDNN_VERSION="8.2.1" \
+ TF_NEED_JEMALLOC=1 \
+ TF_NEED_ROCM=0 \
+ TF_NEED_GCP=0 \
+ TF_NCCL_VERSION="" \
+ TF_CONFIGURE_IOS=0 \
+ TF_NEED_HDFS=0 \
+ TF_NEED_TENSORRT=0 \
+ TF_CUDA_CLANG=0 \
+ TF_NEED_MKL=0 \
+ TF_NEED_OPENCL_SYCL=0 \
+ TF_NEED_COMPUTECPP=0 \
+ TF_USE_DOUBLE_SYCL=0 \
+ TF_USE_HALF_SYCL=0 \
+ TF_NEED_MPI=0 \
+ TF_NEED_GDR=0 \
+ TF_NEED_S3=0 \
+ TF_NEED_KAFKA=0 \
+ TF_DOWNLOAD_CLANG=0 \
+ TF_SET_ANDROID_WORKSPACE=0 \
+ TF_SYCL_BITCODE_TARGET="spirv64" \
+ TF_TENSORRT_VERSION="" \
+ TF_ENABLE_XLA=0 \
+ TF_VERSION=v2.4.4 \
+ TF_NEED_OPENCL=0
+
+RUN echo "Check ulimit to ensure enough open files allowed for Tensorflow build. Default (1024) is usually too low." && \
+    grep open /proc/self/limits && \
+    echo "Limiting CPU threads to: $(($(nproc)/2))" && \
+    echo "Limiting RAM to: $(($(free -g | awk '/^Mem:/{print $2}')*3/4*1024))"
+
+RUN git clone https://github.com/tensorflow/tensorflow.git && \
+    cd tensorflow && \
+    git checkout v2.4.4 && \
+    sed -i "s/_TF_MAX_BAZEL_VERSION = '3\.99\.0'/_TF_MAX_BAZEL_VERSION = '4.99.0'/g" configure.py && \
+    sed -i "s/3\.1\.0/4.2.1/g" .bazelversion && \
+    sed -i '/build --noincompatible_prohibit_aapt1/d' .bazelrc && \
+    ./configure && \
+    bazel build --local_cpu_resources=$(($(nproc)/2)) --local_ram_resources=$(($(free -g | awk '/^Mem:/{print $2}')*3/4*1024)) --cxxopt="-D_GLIBCXX_USE_CXX11_ABI=0" --config=v2 --config=cuda --config=noaws --config=nogcp --config=nohdfs --config=nonccl --verbose_failures //tensorflow/tools/pip_package:build_pip_package && \
+    ./bazel-bin/tensorflow/tools/pip_package/build_pip_package /tmp/tensorflow_pkg && \
+    ls -la /tmp && \
+    ls -la /tmp/tensorflow_pkg && \
+    python -m pip install /tmp/tensorflow_pkg/tensorflow*.whl
+#    python -m pip install /tmp/tensorflow_pkg/tensorflow-2.4.4-cp540-cp540-linux_aarch64.whl
+
+# Solve ml_dtypes error
+RUN python -m pip install ml_dtypes==0.2.0 scipy jetson-stats
 
 # Resize the rootfs
 COPY scripts/resizerootfs.sh /usr/local/bin
@@ -76,7 +265,7 @@ COPY scripts/resizerootfs.service /lib/systemd/system
 RUN systemctl enable resizerootfs.service
 
 # Generate locales
-RUN locale-gen en_US.UTF-8
+RUN locale-gen en_GB.UTF-8
 
 # Network configuration
 COPY config/netcfg.yaml /etc/netplan/netcfg.yaml
@@ -90,3 +279,9 @@ RUN useradd \
         -p $(openssl passwd -6 jetson) \
         -s /bin/bash \
         jetson
+
+# Cleanup
+RUN apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /tmp/*

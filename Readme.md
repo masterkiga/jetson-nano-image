@@ -20,7 +20,7 @@ https://pythops.com/post/create-your-own-image-for-jetson-nano-board.html
 
 **Ubuntu release**: 20.04
 
-**BSP**: 32.7.3
+**BSP**: 32.7.4
 
 ## Supported boards:
 

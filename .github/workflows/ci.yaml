@@ -15,7 +15,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt install -y podman qemu-user-static lrzip
+          sudo apt-get install -y podman qemu-user-static lrzip
           sudo systemctl start systemd-binfmt.service
 
       - name: Create rootfs
@@ -26,36 +26,36 @@ jobs:
           just build-jetson-image  \
             jetson-nano \
             300
-          mv jetson.img jetson-nano-300-32.7.3.img
-          lrzip jetson-nano-300-32.7.3.img
-          rm -rf jetson-nano-300-32.7.3.img
-          ls -lht jetson-nano-300-32.7.3.img.lrz
+          mv jetson.img jetson-nano-300-32.7.4.img
+          lrzip jetson-nano-300-32.7.4.img
+          rm -rf jetson-nano-300-32.7.4.img
+          ls -lht jetson-nano-300-32.7.4.img.lrz
 
       - name: Build jetson image for Jetson nano revision 200
         run: |
           just build-jetson-image \
             jetson-nano \
             200
-          mv jetson.img jetson-nano-200-32.7.3.img
-          lrzip jetson-nano-200-32.7.3.img
-          rm -rf jetson-nano-200-32.7.3.img
-          ls -lht jetson-nano-200-32.7.3.img.lrz
+          mv jetson.img jetson-nano-200-32.7.4.img
+          lrzip jetson-nano-200-32.7.4.img
+          rm -rf jetson-nano-200-32.7.4.img
+          ls -lht jetson-nano-200-32.7.4.img.lrz
 
       - name: Build jetson image for Jetson nano 2G
         run: |
           just build-jetson-image \
             jetson-nano-2gb
-          mv jetson.img jetson-nano-2gb-32.7.3.img
-          lrzip jetson-nano-2gb-32.7.3.img
-          rm -rf jetson-nano-2gb-32.7.3.img
-          ls -lht jetson-nano-2gb-32.7.3.img.lrz
+          mv jetson.img jetson-nano-2gb-32.7.4.img
+          lrzip jetson-nano-2gb-32.7.4.img
+          rm -rf jetson-nano-2gb-32.7.4.img
+          ls -lht jetson-nano-2gb-32.7.4.img.lrz
 
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           body: |
             ubuntu 20.04
-            BSP 32.7.3
+            BSP 32.7.4
           files: "jetson*"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
